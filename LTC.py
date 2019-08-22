@@ -27,12 +27,13 @@ class LTC():
         self.entrenamiento = entramiento
         self.dropout_rate = dropout
 
-    def init_grafica(self):
-        """Metodo que se encarga de construir la grafica de tensorflow para el modelo"""
+    def init_grafica(self,learning_rate):
+        """Metodo que se encarga de construir la grafica de tensorflow para el modelo
+        Tambien sirve para hacer las iteraciones (probablemente)"""
         self.global_step = tf.train.get_or_create_global_step() #Me sirve para el caso de entrenamiento contabilizar las iteraciones
         self.construir_modelo()
         if self.entrenamiento:
-            self.construir_operaciones_gradientes()
+            self.construir_operaciones_gradientes(learning_rate)
 
     def construir_modelo(self):
         """Metodo que se encarga de construir el nucleo del modelo"""
@@ -63,6 +64,7 @@ class LTC():
         self.x = self.max_pooling_3d('max_pool5', self.x, [1, 2, 2, 2, 1], self.formateo_stride(2, 2, 2))
 
         #Capa fc6
+        self.x = self.aplanar("Aplanar6",self.x)
         self.x = self.full_connected('fc6',self.x,2048)
         self.x = self.relu('relu6',self.x)
         self.x = tf.nn.dropout(self.x,rate=self.dropout_rate,name='dropout6')
@@ -78,11 +80,18 @@ class LTC():
 
         #Computo del computo computacional
         with tf.variable_scope('costo'):
+            negative_log_likehood = tf.losses.log_loss(self.y,self.prediccion)
+            self.costo = tf.reduce_mean(negative_log_likehood)
+            tf.summary.scalar('Loss', self.costo)
 
-    def construir_operaciones_gradientes(self):
-        pass
+    def construir_operaciones_gradientes(self,learning_rate):
+        """Metodo que se encarga de aplicar los gradientes y el aprendizaje en la red si el parametro
+        de entrenamiento esta activo"""
+        self.lr = tf.constant(learning_rate,dtype=tf.float32)
 
-    def
+        optimizador = tf.train.GradientDescentOptimizer(self.lr)
+
+        optimizador.minimize(self.costo,global_step=self.global_step,name="paso_aprendizaje")
 
     def formateo_stride(self,depth,height,width):
         """Metodo que se encarga de retornar un arreglo para el stride segun el formato
@@ -134,17 +143,18 @@ class LTC():
             num_salidas: Numero de neuronas de la capa full connected
             """
         with tf.variable_scope(nombre_operacion):
-            x = tf.layers.flatten(entrada,
-                                  name = nombre_operacion + "_aplanado")
             w = tf.get_variable("W",
-                                shape=[x.shape[1].value,num_salidas],
+                                shape=[entrada.shape[1].value,num_salidas],
                                 dtype=tf.float32,
                                 initializer=tf.glorot_uniform_initializer)
             b = tf.get_variable("B",
                                 shape=num_salidas,
                                 dtype=tf.float32,
                                 initializer=tf.zeros_initializer)
-            return tf.nn.xw_plus_b(x,
+            return tf.nn.xw_plus_b(entrada,
                                    weights=w,
                                    biases=b,
                                    name = nombre_operacion)
+
+    def aplanar(self, nombre_operacion,entrada):
+        return tf.layers.flatten(entrada,name=nombre_operacion)
