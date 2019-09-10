@@ -6,23 +6,20 @@ class LTC():
     def __init__(self,
                  entrada,
                  etiquetas,
-                 dataset,
                  num_clases,
                  batch_size = None,
                  dropout = None,
                  entramiento = False):
         """Constructor del modelo LTC
         Args:
-            entrada: Los valores que le voy a  pasar a la red. [ bath, x]
+            entrada: Los valores que le voy a  pasar a la red. [ batch, x]
             etiquetas: Las etiquetas correspondientes a los valores de entrada. [batch, classes]
             entramiento: Define si el modelo estara en modo entrenamiento o ejecucion.
-            dataset: Un string que corresponde a 'ucf101' o 'hmdb51'
             num_clases: El numero de total de clases del dataset especificado
         """
         self.x = entrada
         self.y = etiquetas
         self.batch_size = batch_size
-        self.dataset = dataset
         self.num_clases = num_clases
         self.entrenamiento = entramiento
         self.dropout_rate = dropout
@@ -76,13 +73,13 @@ class LTC():
 
         # Capa fc8
         self.x = self.full_connected('fc8', self.x, self.num_clases)
-        self.prediccion = tf.nn.log_softmax(self.x,name='softmax8')
+        self.predicciones = tf.nn.log_softmax(self.x,name='softmax8')
 
         #Computo del computo computacional
         with tf.variable_scope('costo'):
-            negative_log_likehood = tf.losses.log_loss(self.y,self.prediccion)
+            negative_log_likehood = tf.losses.log_loss(self.y,self.predicciones)
             self.costo = tf.reduce_mean(negative_log_likehood)
-            tf.summary.scalar('Loss', self.costo)
+            tf.summary.scalar('Costo', self.costo)
 
     def construir_operaciones_gradientes(self,learning_rate):
         """Metodo que se encarga de aplicar los gradientes y el aprendizaje en la red si el parametro
