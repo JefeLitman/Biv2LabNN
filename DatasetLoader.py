@@ -1,6 +1,7 @@
 """UCF & HMDB dataset input module.
 """
 
+from random import randint
 import tensorflow as tf
 
 def get_entrada(tipo_dataset, data_path, data_type, len_frames, batch_size, modo):
