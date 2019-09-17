@@ -12,7 +12,7 @@ class LTC():
                  entramiento = False):
         """Constructor del modelo LTC
         Args:
-            entrada: Los valores que le voy a  pasar a la red. [ batch, x]
+            entrada: Los valores que le voy a  pasar a la red. [ batch, time, height, width,channels]
             etiquetas: Las etiquetas correspondientes a los valores de entrada. [batch, classes]
             entramiento: Define si el modelo estara en modo entrenamiento o ejecucion.
             num_clases: El numero de total de clases del dataset especificado

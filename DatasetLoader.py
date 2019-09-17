@@ -15,23 +15,23 @@ def get_entrada(tipo_dataset, data_path, data_type, len_frames, batch_size, modo
       batch_size: Tamaño de los batch.
       modo: Si va ser 'train' o 'test'.
     Returns:
-      entrada: El tensor de entrada de la forma [batch_size, image_size, image_size, 3]
-      labels: Batches of labels. [batch_size, num_classes]
+      entrada: El tensor de entrada de la forma [batch_size, len_frames, tam_imagen, tam_imagen, nro_canales]
+      labels: El tensor de las etiquetas de las entradas [batch_size, num_clases]
     Raises:
       ValueError: when the specified dataset is not supported.
     """
-    
-    image_size = 32
-    if dataset == 'cifar10':
-    label_bytes = 1
-    label_offset = 0
-    num_classes = 10
+
+    if tipo_dataset == 'ucf101':
+
+        label_bytes = 1
+        label_offset = 0
+        num_classes = 10
     elif dataset == 'cifar100':
-    label_bytes = 1
-    label_offset = 1
-    num_classes = 100
+        label_bytes = 1
+        label_offset = 1
+        num_classes = 100
     else:
-    raise ValueError('Not supported dataset %s', dataset)
+        raise ValueError('Not supported dataset %s', dataset)
 
     depth = 3
     image_bytes = image_size * image_size * depth
