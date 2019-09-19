@@ -88,7 +88,7 @@ class LTC():
 
         optimizador = tf.train.GradientDescentOptimizer(self.lr)
 
-        optimizador.minimize(self.costo,global_step=self.global_step,name="paso_aprendizaje")
+        self.train_op = optimizador.minimize(self.costo,global_step=self.global_step,name="paso_aprendizaje")
 
     def formateo_stride(self,depth,height,width):
         """Metodo que se encarga de retornar un arreglo para el stride segun el formato
