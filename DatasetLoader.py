@@ -2,19 +2,7 @@
 """
 
 from random import randint
-import pathlib
 import tensorflow as tf
-
-def seleccionar_cuadro_aleatorio(imagen, nueva_dimension):
-    """Selecciona un cuadro aleatorio de dimension nueva_dimensionxnueva_dimension en la imagen"""
-    pos_y = randint(0,imagen.shape[0].value - nueva_dimension)
-    pos_x = randint(0,imagen.shape[1].value - nueva_dimension)
-    return imagen[pos_y : pos_y + nueva_dimension , pos_x : pos_x + nueva_dimension, :]
-
-def seleccionar_extension_temporal(video, nro_frames):
-    """Selecciona la cantidad nro_frames sobre el video de forma aleatoria y lo retorna"""
-    extension = randint(0,video.shape[0].value - nro_frames)
-    return video[extension : extension + nro_frames, : , :, :]
 
 def get_entrada(tipo_dataset, data_path, data_type, len_frames, batch_size, modo):
     """Construye e inicializa el dataset especificado.
@@ -33,45 +21,76 @@ def get_entrada(tipo_dataset, data_path, data_type, len_frames, batch_size, modo
       ValueError: when the specified dataset is not supported.
     """
 
-    root_path = pathlib.Path("../DataSets/HMDB51")
-    rgb_videos_path = list(root_path.glob('frames/*'))
-    rgb_videos_path = [str(video) for video in rgb_videos_path]
-
-    """El uso del flujo aun no esta habilitado"""
-    # flow_videos_path = list(root_path.glob('frames/*'))
-    # flow_videos_path_path = [str(video) for video in flow_videos_path]
-
     if tipo_dataset == 'ucf101':
-        num_classes = 101
 
-        """Extraccion de los nombres de las clases para este dataset"""
-        nombres_clases = sorted(pathlib.Path(item).name for item in rgb_videos_path if pathlib.Path(item).is_dir())
-        nombres_clases = [clase.split("_")[1] for clase in nombres_clases]
-
-        # Extraccion de todos los tipos de clases en un vector de python
-        clases = []
-        for clase in nombres_clases:
-            if clase not in clases:
-                clases.append(clase)
-
-        nombres_clases = clases
-
-        clase_a_numero = dict((name, index) for index, name in enumerate(nombres_clases))
-
-        """Clases videos es el conjunto de numero de clases para cada video del dataset"""
-        clases_videos = [clase_a_numero[pathlib.Path(item).name.split("_")[1]] for item in rgb_videos_path]
-
-    elif tipo_dataset == 'hmdb51':
-        num_classes = 51
-
+        label_bytes = 1
+        label_offset = 0
+        num_classes = 10
+    elif dataset == 'cifar100':
+        label_bytes = 1
+        label_offset = 1
+        num_classes = 100
     else:
-        raise ValueError('Not supported dataset %s', tipo_dataset)
+        raise ValueError('Not supported dataset %s', dataset)
 
-    if modo == 'train':
+    depth = 3
+    image_bytes = image_size * image_size * depth
+    record_bytes = label_bytes + label_offset + image_bytes
 
+    data_files = tf.gfile.Glob(data_path)
+    file_queue = tf.train.string_input_producer(data_files, shuffle=True)
+    # Read examples from files in the filename queue.
+    reader = tf.FixedLengthRecordReader(record_bytes=record_bytes)
+    _, value = reader.read(file_queue)
+
+    # Convert these examples to dense labels and processed images.
+    record = tf.reshape(tf.decode_raw(value, tf.uint8), [record_bytes])
+    label = tf.cast(tf.slice(record, [label_offset], [label_bytes]), tf.int32)
+    # Convert from string to [depth * height * width] to [depth, height, width].
+    depth_major = tf.reshape(tf.slice(record, [label_offset + label_bytes], [image_bytes]),
+                            [depth, image_size, image_size])
+    # Convert from [depth, height, width] to [height, width, depth].
+    image = tf.cast(tf.transpose(depth_major, [1, 2, 0]), tf.float32)
+
+    if mode == 'train':
+    image = tf.image.resize_image_with_crop_or_pad(
+        image, image_size+4, image_size+4)
+    image = tf.random_crop(image, [image_size, image_size, 3])
+    image = tf.image.random_flip_left_right(image)
+    # Brightness/saturation/constrast provides small gains .2%~.5% on cifar.
+    # image = tf.image.random_brightness(image, max_delta=63. / 255.)
+    # image = tf.image.random_saturation(image, lower=0.5, upper=1.5)
+    # image = tf.image.random_contrast(image, lower=0.2, upper=1.8)
+    image = tf.image.per_image_standardization(image)
+
+    example_queue = tf.RandomShuffleQueue(
+        capacity=16 * batch_size,
+        min_after_dequeue=8 * batch_size,
+        dtypes=[tf.float32, tf.int32],
+        shapes=[[image_size, image_size, depth], [1]])
+    num_threads = 16
     else:
+    image = tf.image.resize_image_with_crop_or_pad(
+        image, image_size, image_size)
+    image = tf.image.per_image_standardization(image)
 
+    example_queue = tf.FIFOQueue(
+        3 * batch_size,
+        dtypes=[tf.float32, tf.int32],
+        shapes=[[image_size, image_size, depth], [1]])
+    num_threads = 1
 
+    example_enqueue_op = example_queue.enqueue([image, label])
+    tf.train.add_queue_runner(tf.train.queue_runner.QueueRunner(
+        example_queue, [example_enqueue_op] * num_threads))
+
+    # Read 'batch' labels + images from the example queue.
+    images, labels = example_queue.dequeue_many(batch_size)
+    labels = tf.reshape(labels, [batch_size, 1])
+    indices = tf.reshape(tf.range(0, batch_size, 1), [batch_size, 1])
+    labels = tf.sparse_to_dense(
+        tf.concat(values=[indices, labels], axis=1),
+        [batch_size, num_classes], 1.0, 0.0)
 
     assert len(images.get_shape()) == 4
     assert images.get_shape()[0] == batch_size
