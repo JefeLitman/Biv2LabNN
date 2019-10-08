@@ -64,12 +64,14 @@ class LTC():
         self.x = self.aplanar("Aplanar6",self.x)
         self.x = self.full_connected('fc6',self.x,2048)
         self.x = self.relu('relu6',self.x)
-        self.x = tf.nn.dropout(self.x,rate=self.dropout_rate,name='dropout6')
+        if self.entrenamiento:
+            self.x = tf.nn.dropout(self.x,rate=self.dropout_rate,name='dropout6')
 
         # Capa fc7
         self.x = self.full_connected('fc7', self.x, 2048)
         self.x = self.relu('relu7', self.x)
-        self.x = tf.nn.dropout(self.x, rate=self.dropout_rate, name='dropout7')
+        if self.entrenamiento:
+            self.x = tf.nn.dropout(self.x, rate=self.dropout_rate, name='dropout7')
 
         # Capa fc8
         self.x = self.full_connected('fc8', self.x, self.num_clases)
@@ -78,8 +80,8 @@ class LTC():
         #Computo del computo computacional
         with tf.variable_scope('costo'):
             negative_log_likehood = tf.losses.log_loss(self.y,self.predicciones)
-            self.costo = tf.reduce_mean(negative_log_likehood)
-            tf.summary.scalar('Costo', self.costo)
+            self.perdida = tf.reduce_mean(negative_log_likehood)
+            tf.summary.scalar('Loss', self.perdida)
 
     def construir_operaciones_gradientes(self,learning_rate):
         """Metodo que se encarga de aplicar los gradientes y el aprendizaje en la red si el parametro
@@ -88,7 +90,7 @@ class LTC():
 
         optimizador = tf.train.GradientDescentOptimizer(self.lr)
 
-        self.train_op = optimizador.minimize(self.costo,global_step=self.global_step,name="paso_aprendizaje")
+        self.train_op = optimizador.minimize(self.perdida,global_step=self.global_step,name="paso_aprendizaje")
 
     def formateo_stride(self,depth,height,width):
         """Metodo que se encarga de retornar un arreglo para el stride segun el formato
@@ -154,4 +156,6 @@ class LTC():
                                    name = nombre_operacion)
 
     def aplanar(self, nombre_operacion,entrada):
-        return tf.layers.flatten(entrada,name=nombre_operacion)
+        return tf.reshape(tensor=entrada,
+                          shape=[self.batch_size,-1],
+                          name=nombre_operacion)
