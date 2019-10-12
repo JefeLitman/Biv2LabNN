@@ -113,10 +113,12 @@ class UCF101():
             frames = frames[crop_point : crop_point + n_frames]
 
         for frame in frames:
-            frame_raw = tf.io.read_file(os.path.join(video_path,frame))
-            frame_tensor = tf.image.decode_image(frame_raw, channels=3,dtype=tf.float32)
+            frame_raw = os.path.join(video_path,frame)
+            #frame_raw = tf.io.read_file(os.path.join(video_path,frame))
+            #frame_tensor = tf.image.decode_image(frame_raw, dtype=tf.float32)
+            frame_tensor = tf.image.decode_jpeg(frame_raw,channels=3)
             if size:
-                frame_tensor = tf.image.resize_images(frame_tensor, size)
+                frame_tensor = tf.image.resize(frame_tensor, size)
             video.append(frame_tensor)
 
         return tf.convert_to_tensor(video)
