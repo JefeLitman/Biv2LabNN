@@ -121,7 +121,7 @@ class LTC():
                                      initializer=tf.glorot_uniform_initializer)
             return tf.nn.conv3d(input=entrada,
                                 filter=kernel,
-                                stride=stride,
+                                strides=stride,
                                 padding='SAME',
                                 name=nombre_operacion)
 

@@ -151,4 +151,4 @@ class UCF101():
 
         self.batch_index += 1
 
-        return tf.convert_to_tensor(batch), tf.convert_to_tensor(labels)
+        return tf.convert_to_tensor(batch), tf.convert_to_tensor(labels, dtype = tf.int64)
