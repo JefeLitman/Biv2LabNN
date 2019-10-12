@@ -97,13 +97,14 @@ class UCF101():
         if self.dev_path:
             self.videos_dev_path = np.random.permutation(self.videos_dev_path)
 
-    def get_frames_video(self,video_path, size = None, n_frames = None):
+    def get_frames_video(self,video_path, size = None, n_frames = None, canales = 3):
         """Metodo que se encarga de cargar en memoria los frames de un video a partir del path
         Args:
             video_path: String de la carpeta que contiene los frames del video.
             size: Tupla de la forma [new_height, new_widht]. Por defecto None donde no se redimensiona
             n_frames: Numero que corresponde a cuantos frames del video se van a tomar. Por
             defecto en None que corresponde a todos.
+            canales: Numero de canales que tienen las imagenes en las carpetas. Debe ser uniforme.
             """
 
         video = []
@@ -113,10 +114,19 @@ class UCF101():
             frames = frames[crop_point : crop_point + n_frames]
 
         for frame in frames:
-            frame_raw = os.path.join(video_path,frame)
-            #frame_raw = tf.io.read_file(os.path.join(video_path,frame))
-            #frame_tensor = tf.image.decode_image(frame_raw, dtype=tf.float32)
-            frame_tensor = tf.image.decode_jpeg(frame_raw,channels=3)
+            frame_path = os.path.join(video_path,frame)
+            if frame_path.endswith(".jpeg") or frame_path.endswith(".jpg"):
+                frame_tensor = tf.io.decode_jpeg(frame_path, channels=canales)
+            elif frame_path.endswith(".png"):
+                frame_tensor = tf.io.decode_png(frame_path, channels=canales)
+            elif frame_path.endswith(".bmp"):
+                frame_tensor = tf.io.decode_bmp(frame_path, channels=canales)
+            else:
+                raise ValueError(
+                    'Los formatos validos de imagen para el generador son png, '
+                    'jpeg, jpg o bmp. '
+                    'Imagen del error: %s' % frame_path)
+            frame_tensor = tf.image.convert_image_dtype(frame_tensor, dtype=tf.float32)
             if size:
                 frame_tensor = tf.image.resize(frame_tensor, size)
             video.append(frame_tensor)
@@ -151,4 +161,4 @@ class UCF101():
 
         self.batch_index += 1
 
-        return tf.convert_to_tensor(batch), tf.convert_to_tensor(labels, dtype = tf.int64)
+        return tf.convert_to_tensor(batch), tf.convert_to_tensor(labels)

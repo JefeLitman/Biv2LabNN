@@ -70,7 +70,7 @@ class LTC():
 
         # Computo del computo computacional
         with tf.variable_scope('costo'):
-            negative_log_likehood = tf.losses.log_loss(etiquetas, predicciones)
+            negative_log_likehood = tf.losses.log_loss(labels=etiquetas,predictions=predicciones)
             perdida = tf.reduce_mean(negative_log_likehood)
             self.perdidas.append(perdida)
 
