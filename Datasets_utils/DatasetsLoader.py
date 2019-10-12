@@ -142,10 +142,13 @@ class UCF101():
             end_index = (self.batch_index + 1)*self.batch_size
 
         batch = []
+        labels = []
         for index in range(start_index,end_index):
+            label = self.videos_train_path[index].split("/")[-2]
             video = self.get_frames_video(self.videos_train_path[index],size=image_size,n_frames=n_frames)
+            labels.append(self.to_number[label])
             batch.append(video)
 
         self.batch_index += 1
 
-        return tf.convert_to_tensor(batch)
+        return tf.convert_to_tensor(batch), tf.convert_to_tensor(labels)
