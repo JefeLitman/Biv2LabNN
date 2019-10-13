@@ -13,7 +13,7 @@ class LTC():
             video_shape: Arreglo de la forma [frames, heigh, width, channels] que corresponde a la forma de los videos.
         """
         self.x = tf.placeholder(dtype=tf.float32, shape= [batch_size]+video_shape, name="Entradas")
-        self.y = tf.placeholder(dtype=tf.float32, shape= [batch_size], name="Etiquetas")
+        self.y = tf.placeholder(dtype=tf.int64, shape= [batch_size], name="Etiquetas")
         self.num_clases = num_clases
         self.batch_size = batch_size
         self.perdidas = []
