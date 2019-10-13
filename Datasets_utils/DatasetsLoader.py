@@ -133,13 +133,14 @@ class UCF101():
 
         return tf.convert_to_tensor(video)
 
-    def get_next_train_batch(self,image_size=None, n_frames=None):
+    def get_next_train_batch(self,image_size=None, n_frames=None, n_canales = 3):
         """Metodo que se encarga de retornar el siguiente batch o primer batch
         de datos cuando se es llamado.
         Args:
             image_size: Tupla de la forma [new_height, new_widht]. Por defecto None donde no se redimensiona.
             n_frames: Numero que corresponde a cuantos frames del video se van a tomar. Por
             defecto en None que corresponde a todos.
+            n_canales: Numero que corresponde al numero de canales que posee las imagenes. Por defecto en 3.
             """
 
         if self.batch_index > self.train_batches:
@@ -155,7 +156,7 @@ class UCF101():
         labels = []
         for index in range(start_index,end_index):
             label = self.videos_train_path[index].split("/")[-2]
-            video = self.get_frames_video(self.videos_train_path[index],size=image_size,n_frames=n_frames)
+            video = self.get_frames_video(self.videos_train_path[index],size=image_size,n_frames=n_frames, canales=n_canales)
             labels.append(self.to_number[label])
             batch.append(video)
 
