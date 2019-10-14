@@ -25,7 +25,6 @@ class LTC():
             learning_rate: Numero desde 0 que corresponde al paso que debe aplicar el optimizador
             dropout_rate: Decimal entre 0 y 1 donde corresponde a la tasa de dropout en la red en entrenamiento
             """
-        self.global_step = tf.train.get_or_create_global_step()
         self.entrenamiento = False #Variable que indica si esta en modo entrenamiento o no
         self.lr = learning_rate
         self.dropout_rate = dropout_rate
@@ -102,10 +101,7 @@ class LTC():
 
         optimizador = tf.train.GradientDescentOptimizer(lr)
 
-        self.entrenar = optimizador.minimize(loss = self.predicciones,
-                                             global_step=self.global_step,
-                                             var_list=tf.trainable_variables(),
-                                             name="aplico_gradientes")
+        self.entrenar = optimizador.minimize(loss = self.predicciones, name="aplico_gradientes")
 
     def __formateo_stride__(self,depth,height,width):
         """Metodo que se encarga de retornar un arreglo para el stride segun el formato

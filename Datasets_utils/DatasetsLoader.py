@@ -6,18 +6,16 @@ import tensorflow as tf
 import warnings
 import numpy as np
 
-class UCF101():
-    """Objeto para cargar todos los datos del Dataset ucf101
-    en forma secuencial entregando batch por batch en entrenamiento
-    o la totalidad de los datos en test.
+class VideoDataGenerator():
+    """Clase para cargar todos los datos de un Dataset a partir de la ruta
+    especificada por el usuario y ademas, agregando transformaciones en
+    tiempo real.
 
     En esta version lee los datos a partir de los frames pero no archivos avi.
-
-    Futuramente seria bueno generar un VideoDataGenerator para cualquier
-    tipo de dataset."""
+    """
 
     def __init__(self,directory_path, batch_size, shuffle = False):
-        """Constructor de la clase UCF101.
+        """Constructor de la clase.
         Args:
             directory_path: String que tiene la ruta absoluta de la ubicacion del
             dataset, incluyendo en el path el split.
@@ -27,18 +25,20 @@ class UCF101():
 
         self.ds_directory = directory_path
         self.batch_size = batch_size
-        self.batch_index = 0
         directories = os.listdir(self.ds_directory)
 
         for i in directories:
             if i.lower() == "train":
                 self.train_path = os.path.join(self.ds_directory,i)
+                self.train_batch_index = 0
                 self.dev_path = None
             elif i.lower() == "test":
                 self.test_path = os.path.join(self.ds_directory,i)
+                self.test_batch_index = 0
                 self.dev_path = None
             elif i.lower() == "dev":
                 self.dev_path = os.path.join(self.ds_directory,i)
+                self.dev_batch_index = 0
             else:
                 raise ValueError(
                     'La organizacion de la carpeta debe seguir la estructura'
@@ -68,7 +68,6 @@ class UCF101():
             """
         self.videos_train_path = []
         self.videos_test_path = []
-        self.videos_dev_path = []
 
         for clase in self.to_class:
 
@@ -83,6 +82,7 @@ class UCF101():
             self.test_batches = self.test_batches + 1 if len(self.videos_test_path) % self.batch_size != 0 else self.test_batches
 
             if self.dev_path:
+                self.videos_dev_path = []
                 videos_dev_path = os.path.join(self.dev_path,clase)
                 self.videos_dev_path += [os.path.join(videos_dev_path,i) for i in sorted(os.listdir(videos_dev_path))]
                 self.dev_batches = int( len(self.videos_dev_path) / self.batch_size)
@@ -135,7 +135,7 @@ class UCF101():
 
     def get_next_train_batch(self,image_size=None, n_frames=None, n_canales = 3):
         """Metodo que se encarga de retornar el siguiente batch o primer batch
-        de datos cuando se es llamado.
+        de datos train cuando se es llamado.
         Args:
             image_size: Tupla de la forma [new_height, new_widht]. Por defecto None donde no se redimensiona.
             n_frames: Numero que corresponde a cuantos frames del video se van a tomar. Por
@@ -143,14 +143,14 @@ class UCF101():
             n_canales: Numero que corresponde al numero de canales que posee las imagenes. Por defecto en 3.
             """
 
-        if self.batch_index > self.train_batches:
-            self.batch_index = 0
+        if self.train_batch_index > self.train_batches:
+            self.train_batch_index = 0
 
-        start_index = self.batch_index*self.batch_size
-        if (self.batch_index + 1)*self.batch_size >= len(self.videos_train_path):
+        start_index = self.train_batch_index*self.batch_size
+        if (self.train_batch_index + 1)*self.batch_size >= len(self.videos_train_path):
             end_index = len(self.videos_train_path)
         else:
-            end_index = (self.batch_index + 1)*self.batch_size
+            end_index = (self.train_batch_index + 1)*self.batch_size
 
         batch = []
         labels = []
@@ -160,6 +160,38 @@ class UCF101():
             labels.append(self.to_number[label])
             batch.append(video)
 
-        self.batch_index += 1
+        self.train_batch_index += 1
+
+        return tf.convert_to_tensor(batch), tf.convert_to_tensor(labels)
+
+    def get_next_test_batch(self, image_size=None, n_frames=None, n_canales=3):
+        """Metodo que se encarga de retornar el siguiente batch o primer batch
+                de datos de test cuando se es llamado.
+                Args:
+                    image_size: Tupla de la forma [new_height, new_widht]. Por defecto None donde no se redimensiona.
+                    n_frames: Numero que corresponde a cuantos frames del video se van a tomar. Por
+                    defecto en None que corresponde a todos.
+                    n_canales: Numero que corresponde al numero de canales que posee las imagenes. Por defecto en 3.
+                    """
+
+        if self.test_batch_index > self.test_batches:
+            self.test_batch_index = 0
+
+        start_index = self.test_batch_index * self.batch_size
+        if (self.test_batch_index + 1) * self.batch_size >= len(self.videos_test_path):
+            end_index = len(self.videos_test_path)
+        else:
+            end_index = (self.test_batch_index + 1) * self.batch_size
+
+        batch = []
+        labels = []
+        for index in range(start_index, end_index):
+            label = self.videos_train_path[index].split("/")[-2]
+            video = self.get_frames_video(self.videos_train_path[index], size=image_size, n_frames=n_frames,
+                                          canales=n_canales)
+            labels.append(self.to_number[label])
+            batch.append(video)
+
+        self.test_batch_index += 1
 
         return tf.convert_to_tensor(batch), tf.convert_to_tensor(labels)
