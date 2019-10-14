@@ -76,15 +76,15 @@ class LTC():
         # Capa fc8
         fc8 = self.__full_connected__('fc8', relu7, self.num_clases)
         self.predicciones = tf.nn.log_softmax(fc8, name='softmax8')
-        self.predicciones = tf.argmax(self.predicciones, axis=1)
+        predicciones = tf.argmax(self.predicciones, axis=1)
 
         # Computo del computo computacional
         with tf.variable_scope('costo'):
-            negative_log_likehood = tf.losses.log_loss(labels=self.y,predictions=self.predicciones)
+            negative_log_likehood = tf.losses.log_loss(labels=self.y,predictions=predicciones)
             perdida = tf.reduce_mean(negative_log_likehood)
             self.perdidas.append(perdida)
 
-            precision = tf.equal(self.y,self.predicciones)
+            precision = tf.equal(self.y,predicciones)
             precision = tf.reduce_mean(tf.cast(precision, tf.float32))
             self.precisiones.append(precision)
 
@@ -102,7 +102,7 @@ class LTC():
 
         optimizador = tf.train.GradientDescentOptimizer(lr)
 
-        self.entrenar = optimizador.minimize(loss = self.perdidas[-1],
+        self.entrenar = optimizador.minimize(loss = self.predicciones,
                                              global_step=self.global_step,
                                              var_list=tf.trainable_variables(),
                                              name="aplico_gradientes")
