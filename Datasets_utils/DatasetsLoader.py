@@ -73,20 +73,33 @@ class VideoDataGenerator():
 
             videos_train_path = os.path.join(self.train_path,clase)
             self.videos_train_path += [os.path.join(videos_train_path,i) for i in sorted(os.listdir(videos_train_path))]
-            self.train_batches = int( len(self.videos_train_path) / self.batch_size)
-            self.train_batches = self.train_batches + 1 if len(self.videos_train_path) % self.batch_size != 0 else self.train_batches
 
             videos_test_path = os.path.join(self.test_path,clase)
             self.videos_test_path += [os.path.join(videos_test_path,i) for i in sorted(os.listdir(videos_test_path))]
-            self.test_batches = int( len(self.videos_test_path) /  self.batch_size)
-            self.test_batches = self.test_batches + 1 if len(self.videos_test_path) % self.batch_size != 0 else self.test_batches
 
             if self.dev_path:
                 self.videos_dev_path = []
                 videos_dev_path = os.path.join(self.dev_path,clase)
                 self.videos_dev_path += [os.path.join(videos_dev_path,i) for i in sorted(os.listdir(videos_dev_path))]
-                self.dev_batches = int( len(self.videos_dev_path) / self.batch_size)
-                self.dev_batches = self.dev_batches + 1 if len(self.videos_dev_path) % self.batch_size != 0 else self.dev_batches
+                
+        self.train_batches = int( len(self.videos_train_path) / self.batch_size)
+        residuo = len(self.videos_train_path) % self.batch_size
+        if residuo != 0:
+            self.train_batches += 1
+            self.videos_train_path += self.videos_train_path[:self.batch_size - residuo]
+        
+        self.test_batches = int( len(self.videos_test_path) /  self.batch_size)
+        residuo = len(self.videos_test_path) % self.batch_size
+        if residuo != 0:
+            self.test_batches += 1
+            self.videos_test_path += self.videos_test_path[:self.batch_size - residuo]
+        
+        if self.dev_path:
+            self.dev_batches = int( len(self.videos_dev_path) / self.batch_size)
+            residuo = len(self.videos_dev_path) % self.batch_size
+            if residuo != 0:
+                self.dev_batches += 1
+                self.videos_dev_path += self.videos_dev_path[:self.batch_size - residuo]
 
     def shuffle_videos(self):
         """Metodo que se encarga de realizar shuffle a los datos si esta
@@ -117,7 +130,7 @@ class VideoDataGenerator():
             frame_path = os.path.join(video_path,frame)
             frame_tensor = cv2.imread(frame_path)
             if size:
-                frame_tensor = cv2.resize(frame_tensor, size)
+                frame_tensor = cv2.resize(frame_tensor, tuple(size))
             video.append(frame_tensor)
 
         return np.asarray(video, dtype=np.float32)
@@ -132,7 +145,7 @@ class VideoDataGenerator():
             n_canales: Numero que corresponde al numero de canales que posee las imagenes. Por defecto en 3.
             """
 
-        if self.train_batch_index > self.train_batches:
+        if self.train_batch_index >= self.train_batches:
             self.train_batch_index = 0
 
         start_index = self.train_batch_index*self.batch_size
@@ -163,7 +176,7 @@ class VideoDataGenerator():
                     n_canales: Numero que corresponde al numero de canales que posee las imagenes. Por defecto en 3.
                     """
 
-        if self.test_batch_index > self.test_batches:
+        if self.test_batch_index >= self.test_batches:
             self.test_batch_index = 0
 
         start_index = self.test_batch_index * self.batch_size

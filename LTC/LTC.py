@@ -16,8 +16,6 @@ class LTC():
         self.y = tf.placeholder(dtype=tf.int64, shape= [batch_size], name="Etiquetas")
         self.num_clases = num_clases
         self.batch_size = batch_size
-        self.perdidas = []
-        self.precisiones = []
 
     def inicializar_modelo(self, learning_rate, dropout_rate = 0.5):
         """Metodo que se encarga de construir la grafica de tensorflow para el modelo.
@@ -80,24 +78,19 @@ class LTC():
         # Computo del computo computacional
         with tf.variable_scope('costo'):
             negative_log_likehood = tf.losses.log_loss(labels=self.y,predictions=predicciones)
-            perdida = tf.reduce_mean(negative_log_likehood)
-            self.perdidas.append(perdida)
+            self.perdida = tf.reduce_mean(negative_log_likehood)
 
             precision = tf.equal(self.y,predicciones)
-            precision = tf.reduce_mean(tf.cast(precision, tf.float32))
-            self.precisiones.append(precision)
+            self.precision = tf.reduce_mean(tf.cast(precision, tf.float32))
 
-            tf.summary.scalar('Loss', perdida)
-            tf.summary.scalar('Accuracy',precision)
+            tf.summary.scalar('Loss', self.perdida)
+            tf.summary.scalar('Accuracy',self.precision)
 
     def __construir_operaciones_gradientes__(self):
         """Metodo que se encarga de construir y aplicar los gradientes sobre las variables para
         entrenar."""
 
         lr = tf.constant(self.lr,dtype=tf.float32)
-
-        #variables_entrenables = tf.trainable_variables()
-        #gradientes = tf.gradients(self.perdidas[-1], name="Calculo_gradientes")
 
         optimizador = tf.train.GradientDescentOptimizer(lr)
 
