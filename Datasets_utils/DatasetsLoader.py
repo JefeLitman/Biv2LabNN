@@ -2,7 +2,7 @@
 """
 
 import os
-import tensorflow as tf
+import cv2
 import warnings
 import numpy as np
 
@@ -115,23 +115,12 @@ class VideoDataGenerator():
 
         for frame in frames:
             frame_path = os.path.join(video_path,frame)
-            if frame_path.endswith(".jpeg") or frame_path.endswith(".jpg"):
-                frame_tensor = tf.io.decode_jpeg(frame_path, channels=canales)
-            elif frame_path.endswith(".png"):
-                frame_tensor = tf.io.decode_png(frame_path, channels=canales)
-            elif frame_path.endswith(".bmp"):
-                frame_tensor = tf.io.decode_bmp(frame_path, channels=canales)
-            else:
-                raise ValueError(
-                    'Los formatos validos de imagen para el generador son png, '
-                    'jpeg, jpg o bmp. '
-                    'Imagen del error: %s' % frame_path)
-            frame_tensor = tf.image.convert_image_dtype(frame_tensor, dtype=tf.float32)
+            frame_tensor = cv2.imread(frame_path)
             if size:
-                frame_tensor = tf.image.resize(frame_tensor, size)
+                frame_tensor = cv2.resize(frame_tensor, size)
             video.append(frame_tensor)
 
-        return tf.convert_to_tensor(video)
+        return np.asarray(video, dtype=np.float32)
 
     def get_next_train_batch(self,image_size=None, n_frames=None, n_canales = 3):
         """Metodo que se encarga de retornar el siguiente batch o primer batch
@@ -162,7 +151,7 @@ class VideoDataGenerator():
 
         self.train_batch_index += 1
 
-        return tf.convert_to_tensor(batch), tf.convert_to_tensor(labels)
+        return np.asarray(batch, dtype=np.float32), np.asarray(labels, dtype=np.int64)
 
     def get_next_test_batch(self, image_size=None, n_frames=None, n_canales=3):
         """Metodo que se encarga de retornar el siguiente batch o primer batch
@@ -194,4 +183,4 @@ class VideoDataGenerator():
 
         self.test_batch_index += 1
 
-        return tf.convert_to_tensor(batch), tf.convert_to_tensor(labels)
+        return np.asarray(batch, dtype=np.float32), np.asarray(labels, dtype=np.int64)
