@@ -20,25 +20,29 @@ class VideoDataGenerator():
                  video_frames = 16,
                  temporal_crop = (None, None),
                  frame_crop = (None, None),
-                 frame_transformation = (None, None),
-                 video_rotation = (None,  None),
-                 shuffle = False
+                 shuffle = False,
+                 conserve_original = False
                  ):
         """Constructor de la clase.
         Args:
             directory_path: String que tiene la ruta absoluta de la ubicacion del
             dataset, incluyendo en el path el split.
-            batch_size: Numero que corresponde al tamaño de elementos por batch
+            batch_size: Numero que corresponde al tamaño de elementos por batch.
             frame_size: Tupla de enteros de la estructura (width, height).
-            video_frames: Numero de frames con los que quedara los batch
-            shuffle: Booleano que determina si deben ser mezclados aleatoreamente los datos. Por defecto en False
+            video_frames: Numero de frames con los que quedara los batch.
+            temporal_crop: Tupla de la forma (Modo, funcion customizada o callback)
+            de python e indica que tipo de corte temporal se hara sobre los videos.
+            frame_crop: Tupla de la forma (Modo, funcion customizada o callback)
+            de python e indica el tipo de corte para cada frame de cada video
+            que se hara sobre los videos
+            shuffle: Booleano que determina si deben ser mezclados aleatoreamente los datos. Por defecto en False.
 
             Aclaratoria es que esta clase incluye por defecto las carpetas de train, test y dev,
             ademas, siempre usa la notacion de canales al final"""
 
         """Definicion de constantes, atributos y restricciones a los parametros"""
         temporal_crop_modes = (None,'sequential','random','custom')
-        video_frames_crop_modes = (None, )
+        frame_crop_modes = (None,'sequential','random','custom')
 
         self.ds_directory = directory_path
         self.batch_size = batch_size
@@ -72,8 +76,31 @@ class VideoDataGenerator():
                     'los mismos nombres sin importar mayus o minus.'
                     'Carpeta del error: %s' % i)
 
+        """Proceso de revisar que las transformaciones escojidas son validas"""
+        if temporal_crop[0] not in temporal_crop_modes:
+            raise ValueError(
+                'Los unicos modos disponibles a usar para corte temporal son '
+                '(None, sequential, random, custom). El modo escojido no es valido '
+                'por que tomo la opcion %s' % temporal_crop[0]
+            )
+        if frame_crop[0] not in frame_crop_modes:
+            raise ValueError(
+                'Los unicos modos disponibles a usar son para corte de imagenes son '
+                '(None, sequential, random, custom). El modo escojido no es valido '
+                'por que tomo la opcion %s' % frame_crop[0]
+            )
+
+        """Proceso de generar los datos con o sin transformaciones"""
         self. generate_classes()
         self.generate_videos_paths()
+        if conserve_original and temporal_crop[0] != None:
+            self.temporal_crop(mode = False, custom_fn=temporal_crop[1])
+        self.temporal_crop(mode = temporal_crop[0], custom_fn=temporal_crop[1])
+        self.frame_crop(mode=frame_crop[0], custom_fn=frame_crop[1], conserve_original=conserve_original)
+
+        if shuffle:
+            self.shuffle_videos()
+        self.complete_batches()
 
     def generate_classes(self):
         """Metodo que se encarga de generar el numero de clases, los nombres
@@ -85,12 +112,11 @@ class VideoDataGenerator():
 
     def generate_videos_paths(self):
         """Metodo que se encarga de generar una lista con el path absoluto de todos los videos para train, test y
-        dev si llega a aplicar esta carpeta.
-        Args:
-            dev_path: Booleano que me determina si existe el path de dev o de lo contario no existe.
-            """
+        dev si llega a aplicar esta carpeta."""
         self.videos_train_path = []
         self.videos_test_path = []
+        if self.dev_path:
+            self.videos_dev_path = []
 
         for clase in self.to_class:
 
@@ -101,70 +127,61 @@ class VideoDataGenerator():
             self.videos_test_path += [os.path.join(videos_test_path,i) for i in sorted(os.listdir(videos_test_path))]
 
             if self.dev_path:
-                self.videos_dev_path = []
                 videos_dev_path = os.path.join(self.dev_path,clase)
                 self.videos_dev_path += [os.path.join(videos_dev_path,i) for i in sorted(os.listdir(videos_dev_path))]
-                
-        self.train_batches = int( len(self.videos_train_path) / self.batch_size)
-        residuo = len(self.videos_train_path) % self.batch_size
+
+    def complete_batches(self):
+        self.train_batches = int( len(self.train_data) / self.batch_size)
+        residuo = len(self.train_data) % self.batch_size
         if residuo != 0:
             self.train_batches += 1
-            self.videos_train_path += self.videos_train_path[:self.batch_size - residuo]
+            self.train_data += self.train_data[:self.batch_size - residuo]
         
-        self.test_batches = int( len(self.videos_test_path) /  self.batch_size)
-        residuo = len(self.videos_test_path) % self.batch_size
+        self.test_batches = int( len(self.test_data) /  self.batch_size)
+        residuo = len(self.test_data) % self.batch_size
         if residuo != 0:
             self.test_batches += 1
-            self.videos_test_path += self.videos_test_path[:self.batch_size - residuo]
+            self.test_data += self.test_data[:self.batch_size - residuo]
         
         if self.dev_path:
-            self.dev_batches = int( len(self.videos_dev_path) / self.batch_size)
-            residuo = len(self.videos_dev_path) % self.batch_size
+            self.dev_batches = int( len(self.dev_data) / self.batch_size)
+            residuo = len(self.dev_data) % self.batch_size
             if residuo != 0:
                 self.dev_batches += 1
-                self.videos_dev_path += self.videos_dev_path[:self.batch_size - residuo]
+                self.dev_data += self.dev_data[:self.batch_size - residuo]
 
     def shuffle_videos(self):
         """Metodo que se encarga de realizar shuffle a los datos si esta
         activada la opcion de shuffle."""
-        self.videos_train_path = np.random.permutation(self.videos_train_path)
-        self.videos_test_path = np.random.permutation(self.videos_test_path)
+        self.train_data = np.random.permutation(self.train_data)
+        self.test_data = np.random.permutation(self.test_data)
 
         if self.dev_path:
-            self.videos_dev_path = np.random.permutation(self.videos_dev_path)
+            self.dev_data = np.random.permutation(self.dev_data)
 
-    def get_frames_video(self,video_path, size = None, n_frames = None, channels = 3):
-        """Metodo que se encarga de cargar en memoria los frames de un video a partir del path
+    def load_video(self, video_dictionary, channels = 3):
+        """Metodo que se encarga de cargar en memoria los frames de un video a partir del
+        diccionario que contiene todos los elementos del video
         Args:
-            video_path: String de la carpeta que contiene los frames del video.
-            size: Tupla de la forma [new_height, new_widht]. Por defecto None donde no se redimensiona
-            n_frames: Numero que corresponde a cuantos frames del video se van a tomar. Por
-            defecto en None que corresponde a todos.
+            video_dictionary: Diccionario que contiene el video de la forma { (nombre_operacion,
+            funcion_frames) : ([frames_paths],etiqueta) }.
             canales: Numero de canales que tienen las imagenes en las carpetas. Debe ser uniforme.
             """
-
         video = []
-        frames = sorted(os.listdir(video_path))
-        if(n_frames):
-            crop_point = np.random.randint(0, len(frames) - n_frames)
-            frames = frames[crop_point : crop_point + n_frames]
+        frames_path = tuple(video_dictionary.values())[0][0]
+        function = tuple(video_dictionary.keys())[0][1]
 
-        for frame in frames:
-            frame_path = os.path.join(video_path,frame)
-            frame_tensor = cv2.imread(frame_path)
-            if size:
-                frame_tensor = cv2.resize(frame_tensor, tuple(size))
-            video.append(frame_tensor)
+        for frame in frames_path:
+            image = self.load_raw_frame(frame, channels)
+            image = function(image)
+            video.append(image)
 
         return np.asarray(video, dtype=np.float32)
 
-    def get_next_train_batch(self,image_size=None, n_frames=None, n_canales = 3):
+    def get_next_train_batch(self, n_canales = 3):
         """Metodo que se encarga de retornar el siguiente batch o primer batch
-        de datos train cuando se es llamado.
+        de datos train si se cumple un epoch.
         Args:
-            image_size: Tupla de la forma [new_height, new_widht]. Por defecto None donde no se redimensiona.
-            n_frames: Numero que corresponde a cuantos frames del video se van a tomar. Por
-            defecto en None que corresponde a todos.
             n_canales: Numero que corresponde al numero de canales que posee las imagenes. Por defecto en 3.
             """
 
@@ -172,54 +189,74 @@ class VideoDataGenerator():
             self.train_batch_index = 0
 
         start_index = self.train_batch_index*self.batch_size
-        if (self.train_batch_index + 1)*self.batch_size >= len(self.videos_train_path):
-            end_index = len(self.videos_train_path)
-        else:
-            end_index = (self.train_batch_index + 1)*self.batch_size
+        end_index = (self.train_batch_index + 1)*self.batch_size
 
         batch = []
         labels = []
         for index in range(start_index,end_index):
-            label = self.videos_train_path[index].split("/")[-2]
-            video = self.get_frames_video(self.videos_train_path[index],size=image_size,n_frames=n_frames, channels=n_canales)
-            labels.append(self.to_number[label])
+            label = tuple(self.train_data[index].values())[0][1]
+            video = self.load_video(self.train_data[index], channels=n_canales)
+            labels.append(label)
             batch.append(video)
 
         self.train_batch_index += 1
 
         return np.asarray(batch, dtype=np.float32), np.asarray(labels, dtype=np.int64)
 
-    def get_next_test_batch(self, image_size=None, n_frames=None, n_canales=3):
+    def get_next_test_batch(self, n_canales=3):
         """Metodo que se encarga de retornar el siguiente batch o primer batch
-                de datos de test cuando se es llamado.
-                Args:
-                    image_size: Tupla de la forma [new_height, new_widht]. Por defecto None donde no se redimensiona.
-                    n_frames: Numero que corresponde a cuantos frames del video se van a tomar. Por
-                    defecto en None que corresponde a todos.
-                    n_canales: Numero que corresponde al numero de canales que posee las imagenes. Por defecto en 3.
-                    """
+        de datos test si se cumple un epoch.
+        Args:
+            n_canales: Numero que corresponde al numero de canales que posee las imagenes. Por defecto en 3.
+            """
 
         if self.test_batch_index >= self.test_batches:
             self.test_batch_index = 0
 
         start_index = self.test_batch_index * self.batch_size
-        if (self.test_batch_index + 1) * self.batch_size >= len(self.videos_test_path):
-            end_index = len(self.videos_test_path)
-        else:
-            end_index = (self.test_batch_index + 1) * self.batch_size
+        end_index = (self.test_batch_index + 1) * self.batch_size
 
         batch = []
         labels = []
         for index in range(start_index, end_index):
-            label = self.videos_train_path[index].split("/")[-2]
-            video = self.get_frames_video(self.videos_train_path[index], size=image_size, n_frames=n_frames,
-                                          channels=n_canales)
-            labels.append(self.to_number[label])
+            label = tuple(self.test_data[index].values())[0][1]
+            video = self.load_video(self.test_data[index], channels=n_canales)
+            labels.append(label)
             batch.append(video)
 
         self.test_batch_index += 1
 
         return np.asarray(batch, dtype=np.float32), np.asarray(labels, dtype=np.int64)
+
+    def get_next_dev_batch(self, n_canales=3):
+        """Metodo que se encarga de retornar el siguiente batch o primer batch
+                de datos dev si se cumple un epoch.
+                Args:
+                    n_canales: Numero que corresponde al numero de canales que posee las imagenes. Por defecto en 3.
+                    """
+        if self.dev_path:
+            if self.test_batch_index >= self.test_batches:
+                self.test_batch_index = 0
+
+            start_index = self.test_batch_index * self.batch_size
+            end_index = (self.test_batch_index + 1) * self.batch_size
+
+            batch = []
+            labels = []
+            for index in range(start_index, end_index):
+                label = tuple(self.test_data[index].values())[0][1]
+                video = self.load_video(self.test_data[index], channels=n_canales)
+                labels.append(label)
+                batch.append(video)
+
+            self.test_batch_index += 1
+
+            return np.asarray(batch, dtype=np.float32), np.asarray(labels, dtype=np.int64)
+        else:
+            raise AttributeError(
+                'No se puede llamar a la funcion debido a que en el directorio no se'
+                'encuentra la carpeta dev y por ende no se tienen datos en dev'
+            )
 
     def load_raw_frame(self,frame_path, channels = 3):
         """Metodo que se encarga de cargar los frames dada la ruta en memoria
@@ -238,9 +275,6 @@ class VideoDataGenerator():
         especificado por el usuario"""
         return cv2.resize(image, tuple(self.frame_size))
 
-    def crop_frame(self, frame, x, y):
-        return frame[x:x+self.frame_size[1], y:y+self.frame_size[0]]
-
     def temporal_crop(self, mode , custom_fn):
         """Metodo que se encarga de realizar el corte temporal en los videos de
         train, test y dev segun el modo especificado y los agrega a la lista de datos.
@@ -252,7 +286,7 @@ class VideoDataGenerator():
             """ Modo secuencial, donde se toman todos los frames del video en forma
             secuencial hasta donde el video lo permita"""
             for video in self.videos_train_path:
-                frames_path = sorted(os.listdir(video))
+                frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
                 while len(frames_path) < self.video_frames:
                     frames_path += frames_path[:self.video_frames - len(frames_path)]
                 label = self.to_number[video.split("/")[-2]]
@@ -269,7 +303,7 @@ class VideoDataGenerator():
                     self.train_data.append(elemento)
 
             for video in self.videos_test_path:
-                frames_path = sorted(os.listdir(video))
+                frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
                 while len(frames_path) < self.video_frames:
                     frames_path += frames_path[:self.video_frames - len(frames_path)]
                 label = self.to_number[video.split("/")[-2]]
@@ -287,7 +321,7 @@ class VideoDataGenerator():
 
             if self.dev_path:
                 for video in self.videos_dev_path:
-                    frames_path = sorted(os.listdir(video))
+                    frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
                     while len(frames_path) < self.video_frames:
                         frames_path += frames_path[:self.video_frames - len(frames_path)]
                     label = self.to_number[video.split("/")[-2]]
@@ -316,7 +350,7 @@ class VideoDataGenerator():
                     ', el valor entregado es de tipo: %s' % type(custom_fn)
                 )
             for video in self.videos_train_path:
-                frames_path = sorted(os.listdir(video))
+                frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
                 while len(frames_path) < self.video_frames:
                     frames_path += frames_path[:self.video_frames - len(frames_path)]
                 label = self.to_number[video.split("/")[-2]]
@@ -336,7 +370,7 @@ class VideoDataGenerator():
                     self.train_data.append(elemento)
 
             for video in self.videos_test_path:
-                frames_path = sorted(os.listdir(video))
+                frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
                 while len(frames_path) < self.video_frames:
                     frames_path += frames_path[:self.video_frames - len(frames_path)]
                 label = self.to_number[video.split("/")[-2]]
@@ -357,7 +391,7 @@ class VideoDataGenerator():
 
             if self.dev_path:
                 for video in self.videos_dev_path:
-                    frames_path = sorted(os.listdir(video))
+                    frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
                     while len(frames_path) < self.video_frames:
                         frames_path += frames_path[:self.video_frames - len(frames_path)]
                     label = self.to_number[video.split("/")[-2]]
@@ -381,7 +415,7 @@ class VideoDataGenerator():
             y ejecutar el metodo para obtener los datos a agregar."""
             if custom_fn:
                 for video in self.videos_train_path:
-                    frames_path = sorted(os.listdir(video))
+                    frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
                     frames = custom_fn(frames_path)
                     label = self.to_number[video.split("/")[-2]]
 
@@ -408,7 +442,7 @@ class VideoDataGenerator():
                         )
 
                 for video in self.videos_test_path:
-                    frames_path = sorted(os.listdir(video))
+                    frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
                     frames = custom_fn(frames_path)
                     label = self.to_number[video.split("/")[-2]]
 
@@ -436,7 +470,7 @@ class VideoDataGenerator():
 
                 if self.dev_path:
                     for video in self.videos_dev_path:
-                        frames_path = sorted(os.listdir(video))
+                        frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
                         frames = custom_fn(frames_path)
                         label = self.to_number[video.split("/")[-2]]
 
@@ -470,7 +504,7 @@ class VideoDataGenerator():
             """Modo None, donde se toman los primeros frames del video"""
             for video in self.videos_train_path:
                 name = "tcrop" + str(self.transformation_index)
-                frames_path = sorted(os.listdir(video))
+                frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
                 while len(frames_path) < self.video_frames:
                     frames_path += frames_path[:self.video_frames - len(frames_path)]
                 frames_path = frames_path[:self.video_frames]
@@ -481,7 +515,7 @@ class VideoDataGenerator():
 
             for video in self.videos_test_path:
                 name = "tcrop" + str(self.transformation_index)
-                frames_path = sorted(os.listdir(video))
+                frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
                 while len(frames_path) < self.video_frames:
                     frames_path += frames_path[:self.video_frames - len(frames_path)]
                 frames_path = frames_path[:self.video_frames]
@@ -493,7 +527,7 @@ class VideoDataGenerator():
             if self.dev_path:
                 for video in self.videos_dev_path:
                     name = "tcrop" + str(self.transformation_index)
-                    frames_path = sorted(os.listdir(video))
+                    frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
                     while len(frames_path) < self.video_frames:
                         frames_path += frames_path[:self.video_frames - len(frames_path)]
                     frames_path = frames_path[:self.video_frames]
