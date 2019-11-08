@@ -1,0 +1,2 @@
+model_checkpoint_path: "LTC_112x112x60_rgb"
+all_model_checkpoint_paths: "LTC_112x112x60_rgb"

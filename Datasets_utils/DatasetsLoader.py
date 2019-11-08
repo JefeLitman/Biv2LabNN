@@ -135,20 +135,20 @@ class VideoDataGenerator():
         residuo = len(self.train_data) % self.batch_size
         if residuo != 0:
             self.train_batches += 1
-            self.train_data += self.train_data[:self.batch_size - residuo]
+            self.train_data = np.append(self.train_data, self.train_data[:self.batch_size - residuo])
         
         self.test_batches = int( len(self.test_data) /  self.batch_size)
         residuo = len(self.test_data) % self.batch_size
         if residuo != 0:
             self.test_batches += 1
-            self.test_data += self.test_data[:self.batch_size - residuo]
+            self.test_data = np.append(self.test_data, self.test_data[:self.batch_size - residuo])
         
         if self.dev_path:
             self.dev_batches = int( len(self.dev_data) / self.batch_size)
             residuo = len(self.dev_data) % self.batch_size
             if residuo != 0:
                 self.dev_batches += 1
-                self.dev_data += self.dev_data[:self.batch_size - residuo]
+                self.dev_data = np.append(self.dev_data, self.dev_data[:self.batch_size - residuo])
 
     def shuffle_videos(self):
         """Metodo que se encarga de realizar shuffle a los datos si esta
@@ -264,11 +264,11 @@ class VideoDataGenerator():
             frame_path: String que posee la ruta absoluta del frame
             channels: Entero opcional, que corresponde a cuantos canales desea cargar la imagen"""
         if channels == 1:
-            return cv2.imread(frame_path, cv2.COLOR_BGR2GRAY)
+            return cv2.imread(frame_path, cv2.IMREAD_GRAYSCALE)
         elif channels == 3:
-            return cv2.imread(frame_path, cv2.COLOR_BGR2RGB)
+            return cv2.cvtColor(cv2.imread(frame_path, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
         else:
-            return cv2.imread(frame_path)
+            return cv2.imread(frame_path, cv2.IMREAD_UNCHANGED)
 
     def resize_frame(self, image):
         """Metodo que se encarga de redimensionar un frame segun el tamaño
