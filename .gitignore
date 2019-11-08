@@ -1,4 +1,5 @@
 __pycache__/
+Checkpoints
 .ipynb_checkpoints
 venv/
 data/
