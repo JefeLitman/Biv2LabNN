@@ -112,8 +112,8 @@ class VideoDataGenerator():
         """Proceso de generar los datos con o sin transformaciones"""
         self. generate_classes()
         self.generate_videos_paths()
-        if conserve_original and temporal_crop[0] != None:
-            self.temporal_crop(mode = False, custom_fn=temporal_crop[1])
+        if conserve_original and temporal_crop[0] not in (None, 'sequential'):
+            self.temporal_crop(mode = 'sequential', custom_fn=temporal_crop[1])
         self.temporal_crop(mode = temporal_crop[0], custom_fn=temporal_crop[1])
         self.frame_crop(mode=frame_crop[0], custom_fn=frame_crop[1], conserve_original=conserve_original)
 
