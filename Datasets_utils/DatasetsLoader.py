@@ -16,7 +16,8 @@ class VideoDataGenerator():
 
     def __init__(self,directory_path,
                  batch_size = 32,
-                 frame_size=(None,None),
+                 original_frame_size = None,
+                 frame_size = None,
                  video_frames = 16,
                  temporal_crop = (None, None),
                  frame_crop = (None, None),
@@ -26,16 +27,23 @@ class VideoDataGenerator():
         """Constructor de la clase.
         Args:
             directory_path: String que tiene la ruta absoluta de la ubicacion del
-            dataset, incluyendo en el path el split.
+                                       dataset, incluyendo en el path el split. Obligatorio.
             batch_size: Numero que corresponde al tamaño de elementos por batch.
-            frame_size: Tupla de enteros de la estructura (width, height).
+                                Por defecto en 32.
+            original_frame_size: Tupla de enteros del tamaño de imagen original a cargar con la estructura (width, height).
+                                                Por defecto en None y tomara el tamaño original de las imagenes.
+            frame_size: Tupla de enteros del tamaña final de imagen que quedara con la estructura (width, height).
+                                 Por defecto en None y tomara el tamaño original de las imagenes.
             video_frames: Numero de frames con los que quedara los batch.
+                                    Por defecto 16.
             temporal_crop: Tupla de la forma (Modo, funcion customizada o callback)
-            de python e indica que tipo de corte temporal se hara sobre los videos.
+                                    de python e indica que tipo de corte temporal se hara sobre los videos.
+                                    Por defecto en (None, None).
             frame_crop: Tupla de la forma (Modo, funcion customizada o callback)
-            de python e indica el tipo de corte para cada frame de cada video
-            que se hara sobre los videos
-            shuffle: Booleano que determina si deben ser mezclados aleatoreamente los datos. Por defecto en False.
+                                 de python e indica el tipo de corte para cada frame de cada video
+                                que se hara sobre los videos. Por defecto en (None, None).
+            shuffle: Booleano que determina si deben ser mezclados aleatoreamente los datos.
+                        Por defecto en False.
 
             Aclaratoria es que esta clase incluye por defecto las carpetas de train, test y dev,
             ademas, siempre usa la notacion de canales al final"""
@@ -46,7 +54,6 @@ class VideoDataGenerator():
 
         self.ds_directory = directory_path
         self.batch_size = batch_size
-        self.frame_size = frame_size
         self.video_frames = video_frames
         self.transformation_index = 0
 
@@ -89,6 +96,18 @@ class VideoDataGenerator():
                 '(None, sequential, random, custom). El modo escojido no es valido '
                 'por que tomo la opcion %s' % frame_crop[0]
             )
+
+        """Proceso de definir el tamaño original de todas las imagenes si no se entrega
+        el parametro de original size y establecer el tamaño de los frames"""
+        if original_frame_size:
+            self.original_size = original_frame_size
+        else:
+            frames_path = [os.path.join(self.videos_train_path[0], frame) for frame in sorted(os.listdir(self.videos_train_path[0]))][0]
+            self.original_size = self.load_raw_frame(frames_path).shape[1::-1]
+        if frame_size:
+            self.frame_size = frame_size
+        else:
+            self.frame_size = self.original_size
 
         """Proceso de generar los datos con o sin transformaciones"""
         self. generate_classes()
@@ -264,11 +283,12 @@ class VideoDataGenerator():
             frame_path: String que posee la ruta absoluta del frame
             channels: Entero opcional, que corresponde a cuantos canales desea cargar la imagen"""
         if channels == 1:
-            return cv2.imread(frame_path, cv2.IMREAD_GRAYSCALE)
+            img = cv2.imread(frame_path, cv2.IMREAD_GRAYSCALE)
         elif channels == 3:
-            return cv2.cvtColor(cv2.imread(frame_path, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
+            img =  cv2.cvtColor(cv2.imread(frame_path, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
         else:
-            return cv2.imread(frame_path, cv2.IMREAD_UNCHANGED)
+            img = cv2.imread(frame_path, cv2.IMREAD_UNCHANGED)
+        return cv2.resize(img, tuple(self.original_size))
 
     def resize_frame(self, image):
         """Metodo que se encarga de redimensionar un frame segun el tamaño
@@ -548,6 +568,8 @@ class VideoDataGenerator():
             converse_original: Booleano por defecto en False que indica si se agregan o reemplazan
             los valores ya almacenados en la lista de datos.
             """
+        original_height = self.original_size[1]
+        original_width = self.original_size[0]
         if mode == 'sequential':
             """Modo secuencial, donde se toman por cada imagen (desde izq a der)
              y arriba hacia abajo el tamaño indicado porel usuario hasta donde se
@@ -557,8 +579,6 @@ class VideoDataGenerator():
                 for index in range(n):
                     #Agrego los nuevos cortes de frames a los datos
                     values = tuple(self.train_data[index].values())[0]
-                    original_height = self.load_raw_frame(values[0][0]).shape[0]
-                    original_width = self.load_raw_frame(values[0][0]).shape[1]
                     n_veces = min([original_width // self.frame_size[0], original_height//self.frame_size[1]])
 
                     for i in range(n_veces):
@@ -584,8 +604,6 @@ class VideoDataGenerator():
                 for index in range(n):
                     # Agrego los nuevos cortes de frames a los datos
                     values = tuple(self.test_data[index].values())[0]
-                    original_height = self.load_raw_frame(values[0][0]).shape[0]
-                    original_width = self.load_raw_frame(values[0][0]).shape[1]
                     n_veces = min([original_width // self.frame_size[0], original_height // self.frame_size[1]])
 
                     for i in range(n_veces):
@@ -612,8 +630,6 @@ class VideoDataGenerator():
                     for index in range(n):
                         # Agrego los nuevos cortes de frames a los datos
                         values = tuple(self.dev_data[index].values())[0]
-                        original_height = self.load_raw_frame(values[0][0]).shape[0]
-                        original_width = self.load_raw_frame(values[0][0]).shape[1]
                         n_veces = min([original_width // self.frame_size[0], original_height // self.frame_size[1]])
 
                         for i in range(n_veces):
@@ -640,8 +656,6 @@ class VideoDataGenerator():
                 for index in range(n):
                     # Agrego los nuevos cortes de frames a los nuevos datos
                     values = tuple(self.train_data[index].values())[0]
-                    original_height = self.load_raw_frame(values[0][0]).shape[0]
-                    original_width = self.load_raw_frame(values[0][0]).shape[1]
                     n_veces = min([original_width // self.frame_size[0], original_height // self.frame_size[1]])
 
                     for i in range(n_veces):
@@ -663,8 +677,6 @@ class VideoDataGenerator():
                 for index in range(n):
                     # Agrego los nuevos cortes de frames a los nuevos datos
                     values = tuple(self.test_data[index].values())[0]
-                    original_height = self.load_raw_frame(values[0][0]).shape[0]
-                    original_width = self.load_raw_frame(values[0][0]).shape[1]
                     n_veces = min([original_width // self.frame_size[0], original_height // self.frame_size[1]])
 
                     for i in range(n_veces):
@@ -687,8 +699,6 @@ class VideoDataGenerator():
                     for index in range(n):
                         # Agrego los nuevos cortes de frames a los nuevos datos
                         values = tuple(self.dev_data[index].values())[0]
-                        original_height = self.load_raw_frame(values[0][0]).shape[0]
-                        original_width = self.load_raw_frame(values[0][0]).shape[1]
                         n_veces = min([original_width // self.frame_size[0], original_height // self.frame_size[1]])
 
                         for i in range(n_veces):
@@ -722,8 +732,6 @@ class VideoDataGenerator():
                 for index in range(n):
                     # Agrego los nuevos cortes de frames a los datos
                     values = tuple(self.train_data[index].values())[0]
-                    original_height = self.load_raw_frame(values[0][0]).shape[0]
-                    original_width = self.load_raw_frame(values[0][0]).shape[1]
 
                     for _ in range(n_veces):
                         start_width = np.random.randint(0, original_width - self.frame_size[0])
@@ -747,8 +755,6 @@ class VideoDataGenerator():
                 for index in range(n):
                     # Agrego los nuevos cortes de frames a los datos
                     values = tuple(self.test_data[index].values())[0]
-                    original_height = self.load_raw_frame(values[0][0]).shape[0]
-                    original_width = self.load_raw_frame(values[0][0]).shape[1]
 
                     for _ in range(n_veces):
                         start_width = np.random.randint(0, original_width - self.frame_size[0])
@@ -773,8 +779,6 @@ class VideoDataGenerator():
                     for index in range(n):
                         # Agrego los nuevos cortes de frames a los datos
                         values = tuple(self.dev_data[index].values())[0]
-                        original_height = self.load_raw_frame(values[0][0]).shape[0]
-                        original_width = self.load_raw_frame(values[0][0]).shape[1]
 
                         for _ in range(n_veces):
                             start_width = np.random.randint(0, original_width - self.frame_size[0])
@@ -799,8 +803,6 @@ class VideoDataGenerator():
                 for index in range(n):
                     # Agrego los nuevos cortes de frames a los datos
                     values = tuple(self.train_data[index].values())[0]
-                    original_height = self.load_raw_frame(values[0][0]).shape[0]
-                    original_width = self.load_raw_frame(values[0][0]).shape[1]
 
                     for _ in range(n_veces):
                         start_width = np.random.randint(0, original_width - self.frame_size[0])
@@ -820,8 +822,6 @@ class VideoDataGenerator():
                 for index in range(n):
                     # Agrego los nuevos cortes de frames a los datos
                     values = tuple(self.test_data[index].values())[0]
-                    original_height = self.load_raw_frame(values[0][0]).shape[0]
-                    original_width = self.load_raw_frame(values[0][0]).shape[1]
 
                     for _ in range(n_veces):
                         start_width = np.random.randint(0, original_width - self.frame_size[0])
@@ -842,8 +842,6 @@ class VideoDataGenerator():
                     for index in range(n):
                         # Agrego los nuevos cortes de frames a los datos
                         values = tuple(self.dev_data[index].values())[0]
-                        original_height = self.load_raw_frame(values[0][0]).shape[0]
-                        original_width = self.load_raw_frame(values[0][0]).shape[1]
 
                         for _ in range(n_veces):
                             start_width = np.random.randint(0, original_width - self.frame_size[0])
@@ -867,8 +865,6 @@ class VideoDataGenerator():
                     for index in range(n):
                         #Arego lso nuevos cortes de franes a los datos
                         values = tuple(self.train_data[index].values())[0]
-                        original_height = self.load_raw_frame(values[0][0]).shape[0]
-                        original_width = self.load_raw_frame(values[0][0]).shape[1]
                         cortes = custom_fn(original_width, original_height)
 
                         try:
@@ -902,8 +898,6 @@ class VideoDataGenerator():
                     for index in range(n):
                         # Arego lso nuevos cortes de franes a los datos
                         values = tuple(self.test_data[index].values())[0]
-                        original_height = self.load_raw_frame(values[0][0]).shape[0]
-                        original_width = self.load_raw_frame(values[0][0]).shape[1]
                         cortes = custom_fn(original_width, original_height)
 
                         try:
@@ -938,8 +932,6 @@ class VideoDataGenerator():
                         for index in range(n):
                             # Arego lso nuevos cortes de franes a los datos
                             values = tuple(self.dev_data[index].values())[0]
-                            original_height = self.load_raw_frame(values[0][0]).shape[0]
-                            original_width = self.load_raw_frame(values[0][0]).shape[1]
                             cortes = custom_fn(original_width, original_height)
 
                             try:
@@ -976,8 +968,6 @@ class VideoDataGenerator():
                     for index in range(n):
                         # Reemplazo los nuevos cortes de frames a los datos
                         values = tuple(self.train_data[index].values())[0]
-                        original_height = self.load_raw_frame(values[0][0]).shape[0]
-                        original_width = self.load_raw_frame(values[0][0]).shape[1]
                         cortes = custom_fn(original_width, original_height)
 
                         try:
@@ -1009,8 +999,6 @@ class VideoDataGenerator():
                     for index in range(n):
                         # Reemplazo los nuevos cortes de frames a los datos
                         values = tuple(self.test_data[index].values())[0]
-                        original_height = self.load_raw_frame(values[0][0]).shape[0]
-                        original_width = self.load_raw_frame(values[0][0]).shape[1]
                         cortes = custom_fn(original_width, original_height)
 
                         try:
@@ -1043,8 +1031,6 @@ class VideoDataGenerator():
                         for index in range(n):
                             # Reemplazo los nuevos cortes de frames a los datos
                             values = tuple(self.dev_data[index].values())[0]
-                            original_height = self.load_raw_frame(values[0][0]).shape[0]
-                            original_width = self.load_raw_frame(values[0][0]).shape[1]
                             cortes = custom_fn(original_width, original_height)
 
                             try:
