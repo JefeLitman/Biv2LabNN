@@ -220,7 +220,7 @@ class VideoDataGenerator():
 
         self.train_batch_index += 1
 
-        return np.asarray(batch, dtype=np.float32), np.asarray(labels, dtype=np.int64)
+        return np.asarray(batch, dtype=np.float32), np.asarray(labels, dtype=np.int32)
 
     def get_next_test_batch(self, n_canales=3):
         """Metodo que se encarga de retornar el siguiente batch o primer batch
@@ -245,7 +245,7 @@ class VideoDataGenerator():
 
         self.test_batch_index += 1
 
-        return np.asarray(batch, dtype=np.float32), np.asarray(labels, dtype=np.int64)
+        return np.asarray(batch, dtype=np.float32), np.asarray(labels, dtype=np.int32)
 
     def get_next_dev_batch(self, n_canales=3):
         """Metodo que se encarga de retornar el siguiente batch o primer batch
@@ -270,7 +270,7 @@ class VideoDataGenerator():
 
             self.test_batch_index += 1
 
-            return np.asarray(batch, dtype=np.float32), np.asarray(labels, dtype=np.int64)
+            return np.asarray(batch, dtype=np.float32), np.asarray(labels, dtype=np.int32)
         else:
             raise AttributeError(
                 'No se puede llamar a la funcion debido a que en el directorio no se'
