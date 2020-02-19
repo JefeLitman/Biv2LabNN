@@ -1,171 +1,475 @@
-import tensorflow as tf
+from tensorflow import keras
+from inception_modules import *
 
-class LTC():
-    """Modelo LTC implementado en TensorFlow"""
+def get_LTC_inception_enhan_minus1(video_shape, n_classes, dropout, weigh_decay, channels_reduction):
+    entrada = keras.Input(shape=video_shape,
+                     name="Input_video")
+    #Conv1
+    x = keras.layers.Conv3D(filters=64, kernel_size=3, padding="same", activation="relu", 
+                              kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                              name='conv3d_1')(entrada)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_1")(x)
+    x = keras.layers.MaxPool3D(pool_size=(1,2,2),strides=(1,2,2), name='max_pooling3d_1')(x)
 
-    def __init__(self, num_clases,
-                 batch_size,
-                 video_shape):
-        """Constructor del modelo LTC
-        Args:
-            num_clases: El numero de total de clases que se van a clasificar.
-            batch_size: Numero de elemento dentro de cada batch.
-            video_shape: Arreglo de la forma [frames, heigh, width, channels] que corresponde a la forma de los videos.
-        """
-        self.x = tf.placeholder(dtype=tf.float32, shape= [batch_size]+video_shape, name="Entradas")
-        self.y = tf.placeholder(dtype=tf.int64, shape= [batch_size], name="Etiquetas")
-        self.num_clases = num_clases
-        self.batch_size = batch_size
+    #Conv2
+    x = keras.layers.Conv3D(filters=128, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_2')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_2")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2), name='max_pooling3d_2')(x)
 
-    def inicializar_modelo(self, learning_rate, dropout_rate = 0.5):
-        """Metodo que se encarga de construir la grafica de tensorflow para el modelo.
-        Args:
-            learning_rate: Numero desde 0 que corresponde al paso que debe aplicar el optimizador
-            dropout_rate: Decimal entre 0 y 1 donde corresponde a la tasa de dropout en la red en entrenamiento
-            """
-        self.entrenamiento = False #Variable que indica si esta en modo entrenamiento o no
-        self.lr = learning_rate
-        self.dropout_rate = dropout_rate
-        self.__construir_modelo__()
-        self.__construir_operaciones_gradientes__()
+    #Conv3
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_3')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_3")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_3')(x)
 
-    def __construir_modelo__(self):
-        """Metodo que se encarga de construir la grafica del modelo para poder """
+    #Conv4
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_4')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_4")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_4')(x)
 
-        # Capa conv1
-        conv1 = self.__convolucion_3d__('conv1', self.x, 3, self.x.shape[4], 64, self.__formateo_stride__(1, 1, 1))
-        relu1 = self.__relu__('relu1', conv1)
-        max_pool1 = self.__max_pooling_3d__('max_pool1', relu1, [1, 1, 2, 2, 1], self.__formateo_stride__(2, 2, 2))
+    #Inception Module
+    x = inception_enhanced(x, 5, channels_reduction)
 
-        # Capa conv2
-        conv2 = self.__convolucion_3d__('conv2', max_pool1, 3, 64, 128, self.__formateo_stride__(1, 1, 1))
-        relu2 = self.__relu__('relu2', conv2)
-        max_pool2 = self.__max_pooling_3d__('max_pool2', relu2, [1, 2, 2, 2, 1], self.__formateo_stride__(2, 2, 2))
+    #fc7s
+    x = keras.layers.Flatten(name='flatten_6')(x)
+    x = keras.layers.Dense(2048, activation="relu", kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                         name='dense_6')(x)
+    x = keras.layers.Dropout(rate=dropout,name='dropout_6')(x)
 
-        # Capa conv3
-        conv3 = self.__convolucion_3d__('conv3', max_pool2, 3, 128, 256, self.__formateo_stride__(1, 1, 1))
-        relu3 = self.__relu__('relu3', conv3)
-        max_pool3 = self.__max_pooling_3d__('max_pool3', relu3, [1, 2, 2, 2, 1], self.__formateo_stride__(2, 2, 2))
+    #fc8
+    x = keras.layers.Dense(2048, activation="relu", kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                         name='dense_7')(x)
+    x = keras.layers.Dropout(rate=dropout,name='dropout_7')(x)
 
-        # Capa conv4
-        conv4 = self.__convolucion_3d__('conv4', max_pool3, 3, 256, 256, self.__formateo_stride__(1, 1, 1))
-        relu4 = self.__relu__('relu4', conv4)
-        max_pool4 = self.__max_pooling_3d__('max_pool4', relu4, [1, 2, 2, 2, 1], self.__formateo_stride__(2, 2, 2))
+    #fc9
+    salidas = keras.layers.Dense(n_classes, activation="softmax", 
+                              kernel_regularizer=keras.regularizers.l2(weigh_decay), name='dense_8')(x)
 
-        # Capa conv5
-        conv5 = self.__convolucion_3d__('conv5', max_pool4, 3, 256, 256, self.__formateo_stride__(1, 1, 1))
-        relu5 = self.__relu__('relu5', conv5)
-        max_pool5 = self.__max_pooling_3d__('max_pool5', relu5, [1, 2, 2, 2, 1], self.__formateo_stride__(2, 2, 2))
+    return keras.Model(entrada, salidas, name="LTC_BatchNorm_inception-enhanced-minus1")
 
-        # Capa fc6
-        flatten = self.__aplanar__("Aplanar6", max_pool5)
-        fc6= self.__full_connected__('fc6', flatten, 2048)
-        relu6 = self.__relu__('relu6', fc6)
-        if self.entrenamiento:
-            relu6 = tf.nn.dropout(relu6, rate=self.dropout_rate, name='dropout6')
+def get_LTC_inception_naive_minus1(video_shape, n_classes, dropout, weigh_decay, channels_reduction):
+    entrada = keras.Input(shape=video_shape,
+                     name="Input_video")
+    #Conv1
+    x = keras.layers.Conv3D(filters=64, kernel_size=3, padding="same", activation="relu", 
+                              kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                              name='conv3d_1')(entrada)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_1")(x)
+    x = keras.layers.MaxPool3D(pool_size=(1,2,2),strides=(1,2,2), name='max_pooling3d_1')(x)
 
-        # Capa fc7
-        fc7 = self.__full_connected__('fc7', relu6, 2048)
-        relu7 = self.__relu__('relu7', fc7)
-        if self.entrenamiento:
-            relu7 = tf.nn.dropout(relu7, rate=self.dropout_rate, name='dropout7')
+    #Conv2
+    x = keras.layers.Conv3D(filters=128, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_2')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_2")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2), name='max_pooling3d_2')(x)
 
-        # Capa fc8
-        fc8 = self.__full_connected__('fc8', relu7, self.num_clases)
-        self.predicciones = tf.nn.log_softmax(fc8, name='softmax8')
-        predicciones = tf.argmax(self.predicciones, axis=1)
+    #Conv3
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_3')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_3")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_3')(x)
 
-        # Computo del computo computacional
-        with tf.variable_scope('costo'):
-            negative_log_likehood = tf.losses.log_loss(labels=self.y,predictions=predicciones)
-            self.perdida = tf.reduce_mean(negative_log_likehood)
+    #Conv4
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_4')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_4")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_4')(x)
 
-            precision = tf.equal(self.y,predicciones)
-            self.precision = tf.reduce_mean(tf.cast(precision, tf.float32))
+    #Inception Module
+    x = inception_naive(x, 5, channels_reduction)
 
-            tf.summary.scalar('Loss', self.perdida)
-            tf.summary.scalar('Accuracy',self.precision)
+    #fc7s
+    x = keras.layers.Flatten(name='flatten_6')(x)
+    x = keras.layers.Dense(2048, activation="relu", kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                         name='dense_6')(x)
+    x = keras.layers.Dropout(rate=dropout,name='dropout_6')(x)
 
-    def __construir_operaciones_gradientes__(self):
-        """Metodo que se encarga de construir y aplicar los gradientes sobre las variables para
-        entrenar."""
+    #fc8
+    x = keras.layers.Dense(2048, activation="relu", kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                         name='dense_7')(x)
+    x = keras.layers.Dropout(rate=dropout,name='dropout_7')(x)
 
-        lr = tf.constant(self.lr,dtype=tf.float32)
+    #fc9
+    salidas = keras.layers.Dense(n_classes, activation="softmax", 
+                              kernel_regularizer=keras.regularizers.l2(weigh_decay), name='dense_8')(x)
 
-        optimizador = tf.train.GradientDescentOptimizer(lr)
+    return keras.Model(entrada, salidas, name="LTC_BatchNorm_inception-naive-minus1")
 
-        self.entrenar = optimizador.minimize(loss = self.predicciones, name="aplico_gradientes")
+def get_LTC_inception_enhanced(video_shape, n_classes, dropout, weigh_decay, channels_reduction):
+    entrada = keras.Input(shape=video_shape,
+                     name="Input_video")
+    #Conv1
+    x = keras.layers.Conv3D(filters=64, kernel_size=3, padding="same", activation="relu", 
+                              kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                              name='conv3d_1')(entrada)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_1")(x)
+    x = keras.layers.MaxPool3D(pool_size=(1,2,2),strides=(1,2,2), name='max_pooling3d_1')(x)
 
-    def __formateo_stride__(self,depth,height,width):
-        """Metodo que se encarga de retornar un arreglo para el stride segun el formato
-        NDHWC.
-        [batch, depth, Height, Width,  Channels]"""
-        return [1,depth,height,width,1]
+    #Conv2
+    x = keras.layers.Conv3D(filters=128, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_2')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_2")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2), name='max_pooling3d_2')(x)
 
-    def __convolucion_3d__(self, nombre_operacion, entrada, tam_kernel, filtros_entrada, filtros_salida, stride):
-        """Metodo que me retorna la operacion de convolucion 3D en tensorflow
-        Args:
-            nombre_operacion: Correpsonde al nombre de la capa que tendra la convolucion 3D y debe ser unico
-            tam_kernel: Numero que corresponde al tamaño del filtro que se va aplicar [depth, height, width, ins, outs]
-            stride: Vector que contiene el stride que se va realizar sobre la convolucion [batch, depth, Height, Width,  Channels]
-            """
-        with tf.variable_scope(nombre_operacion):
-            kernel = tf.get_variable(name="W",
-                                     shape=[tam_kernel,tam_kernel,tam_kernel,filtros_entrada,filtros_salida],
-                                     dtype=tf.float32,
-                                     initializer=tf.glorot_uniform_initializer)
-            return tf.nn.conv3d(input=entrada,
-                                filter=kernel,
-                                strides=stride,
-                                padding='SAME',
-                                name=nombre_operacion)
+    #Conv3
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_3')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_3")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_3')(x)
 
-    def __max_pooling_3d__(self,nombre_operacion, entrada,tam_kernel,stride):
-        """Metodo que me retorna la operacion de max_pooling en 3D
-        Args:
-            nombre_operacion: Correpsonde al nombre de la capa que tendra la convolucion 3D y debe ser unico
-            tam_kernel: Vector que corresponde al tamaño de kernel que se aplicara [batches, depth, height, width, channels]
-            stride: Vector que contiene el stride que se va realizar sobre la convolucion [batch, depth, Height, Width,  Channels]
-            """
-        return tf.nn.max_pool3d(input=entrada,
-                                    ksize=tam_kernel,
-                                    strides=stride,
-                                    padding='SAME',
-                                    name=nombre_operacion)
+    #Conv4
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_4')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_4")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_4')(x)
 
-    def __relu__(self,nombre_operacion,entrada):
-        return  tf.nn.relu(features=entrada,
-                           name=nombre_operacion)
+    #Conv5
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_5')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_5")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_5')(x)
 
-    def __full_connected__(self,nombre_operacion,entrada,num_salidas):
-        """Metodo que me retorna una capa full connected
-        Args:
-            nombre_operacion: Corresponde al nombre de la capa que tendra la full connected y debe ser unico
-            entrada: Debe tener dimension [batch, num_entradas]
-            num_entradas: Numero de entradas que tendra la red
-            num_salidas: Numero de neuronas de la capa full connected
-            """
-        with tf.variable_scope(nombre_operacion):
-            w = tf.get_variable("W",
-                                shape=[entrada.shape[1].value,num_salidas],
-                                dtype=tf.float32,
-                                initializer=tf.glorot_uniform_initializer)
-            b = tf.get_variable("B",
-                                shape=num_salidas,
-                                dtype=tf.float32,
-                                initializer=tf.zeros_initializer)
-            return tf.nn.xw_plus_b(entrada,
-                                   weights=w,
-                                   biases=b,
-                                   name = nombre_operacion)
+    #Inception Module
+    x = inception_enhanced(x, 6, channels_reduction)
 
-    def __aplanar__(self, nombre_operacion,entrada):
-        return tf.reshape(tensor=entrada,
-                          shape=[self.batch_size,-1],
-                          name=nombre_operacion)
+    #fc7s
+    x = keras.layers.Flatten(name='flatten_7')(x)
+    x = keras.layers.Dense(2048, activation="relu", kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                         name='dense_7')(x)
+    x = keras.layers.Dropout(rate=dropout,name='dropout_7')(x)
 
-    def enable_training(self):
-        self.entrenamiento = True
+    #fc8
+    x = keras.layers.Dense(2048, activation="relu", kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                         name='dense_8')(x)
+    x = keras.layers.Dropout(rate=dropout,name='dropout_8')(x)
 
-    def disable_training(self):
-        self.entrenamiento = False
+    #fc9
+    salidas = keras.layers.Dense(n_classes, activation="softmax", 
+                              kernel_regularizer=keras.regularizers.l2(weigh_decay), name='dense_9')(x)
+
+    return keras.Model(entrada, salidas, name="LTC_BatchNorm_inception-enhanced")
+
+def get_LTC_inception_naive(video_shape, n_classes, dropout, weigh_decay, channels_reduction):
+    entrada = keras.Input(shape=video_shape,
+                     name="Input_video")
+    #Conv1
+    x = keras.layers.Conv3D(filters=64, kernel_size=3, padding="same", activation="relu", 
+                              kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                              name='conv3d_1')(entrada)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_1")(x)
+    x = keras.layers.MaxPool3D(pool_size=(1,2,2),strides=(1,2,2), name='max_pooling3d_1')(x)
+
+    #Conv2
+    x = keras.layers.Conv3D(filters=128, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_2')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_2")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2), name='max_pooling3d_2')(x)
+
+    #Conv3
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_3')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_3")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_3')(x)
+
+    #Conv4
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_4')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_4")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_4')(x)
+
+    #Conv5
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_5')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_5")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_5')(x)
+
+    #Inception Module
+    x = inception_naive(x, 6, channels_reduction)
+
+    #fc7s
+    x = keras.layers.Flatten(name='flatten_7')(x)
+    x = keras.layers.Dense(2048, activation="relu", kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                         name='dense_7')(x)
+    x = keras.layers.Dropout(rate=dropout,name='dropout_7')(x)
+
+    #fc8
+    x = keras.layers.Dense(2048, activation="relu", kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                         name='dense_8')(x)
+    x = keras.layers.Dropout(rate=dropout,name='dropout_8')(x)
+
+    #fc9
+    salidas = keras.layers.Dense(n_classes, activation="softmax", 
+                              kernel_regularizer=keras.regularizers.l2(weigh_decay), name='dense_9')(x)
+
+    return keras.Model(entrada, salidas, name="LTC_BatchNorm_inception-naive")
+
+def get_LTC_inception_convTrans3D(video_shape, n_classes, dropout, weigh_decay, channels_reduction):
+    """Function that return the LTC model with Batch Normalization in the convolutional 
+    layer and reduces in the end the channels given the parameters.
+    Args:
+        video_shape: Tuple or List with the shape of the input.
+        n_classes: Integer with the number of classes to predict.
+        dropout: Float between 0 and 1 for the dropout in the fully connected layers.
+        weigh_decay: Float between 0 and inf for the weight decay in the layers.
+        channels_reduction: Integer specifying the number of channels to reduce.
+    """
+    entrada = keras.Input(shape=video_shape,
+                     name="Input_video")
+    #Conv1
+    x = keras.layers.Conv3D(filters=64, kernel_size=3, padding="same", activation="relu", 
+                              kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                              name='conv3d_1')(entrada)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_1")(x)
+    x = keras.layers.MaxPool3D(pool_size=(1,2,2),strides=(1,2,2), name='max_pooling3d_1')(x)
+
+    #Conv2
+    x = keras.layers.Conv3D(filters=128, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_2')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_2")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2), name='max_pooling3d_2')(x)
+
+    #Conv3
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_3')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_3")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_3')(x)
+
+    #Conv4
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_4')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_4")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_4')(x)
+
+    #Conv5
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_5')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_5")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_5')(x)
+
+    #Inception Module
+    x = convTrans3D(x, 6, channels_reduction)
+
+    #fc7s
+    x = keras.layers.Flatten(name='flatten_7')(x)
+    x = keras.layers.Dense(2048, activation="relu", kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                         name='dense_7')(x)
+    x = keras.layers.Dropout(rate=dropout,name='dropout_7')(x)
+
+    #fc8
+    x = keras.layers.Dense(2048, activation="relu", kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                         name='dense_8')(x)
+    x = keras.layers.Dropout(rate=dropout,name='dropout_8')(x)
+
+    #fc9
+    salidas = keras.layers.Dense(n_classes, activation="softmax", 
+                              kernel_regularizer=keras.regularizers.l2(weigh_decay), name='dense_9')(x)
+
+    return keras.Model(entrada, salidas, name="LTC_BatchNorm_convTrans3D")
+
+def get_LTC_inception_channels(video_shape, n_classes, dropout, weigh_decay, channels_reduction):
+    """Function that return the LTC model with Batch Normalization in the convolutional 
+    layer and reduces in the end the channels given the parameters.
+    Args:
+        video_shape: Tuple or List with the shape of the input.
+        n_classes: Integer with the number of classes to predict.
+        dropout: Float between 0 and 1 for the dropout in the fully connected layers.
+        weigh_decay: Float between 0 and inf for the weight decay in the layers.
+        channels_reduction: Integer specifying the number of channels to reduce.
+    """
+    entrada = keras.Input(shape=video_shape,
+                     name="Input_video")
+    #Conv1
+    x = keras.layers.Conv3D(filters=64, kernel_size=3, padding="same", activation="relu", 
+                              kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                              name='conv3d_1')(entrada)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_1")(x)
+    x = keras.layers.MaxPool3D(pool_size=(1,2,2),strides=(1,2,2), name='max_pooling3d_1')(x)
+
+    #Conv2
+    x = keras.layers.Conv3D(filters=128, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_2')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_2")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2), name='max_pooling3d_2')(x)
+
+    #Conv3
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_3')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_3")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_3')(x)
+
+    #Conv4
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_4')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_4")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_4')(x)
+
+    #Conv5
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_5')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_5")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_5')(x)
+
+    #Inception Module
+    x = conv3D_Channels(x, 6, channels_reduction)
+
+    #fc7s
+    x = keras.layers.Flatten(name='flatten_7')(x)
+    x = keras.layers.Dense(2048, activation="relu", kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                         name='dense_7')(x)
+    x = keras.layers.Dropout(rate=dropout,name='dropout_7')(x)
+
+    #fc8
+    x = keras.layers.Dense(2048, activation="relu", kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                         name='dense_8')(x)
+    x = keras.layers.Dropout(rate=dropout,name='dropout_8')(x)
+
+    #fc9
+    salidas = keras.layers.Dense(n_classes, activation="softmax", 
+                              kernel_regularizer=keras.regularizers.l2(weigh_decay), name='dense_9')(x)
+
+    return keras.Model(entrada, salidas, name="LTC_BatchNorm_inception-channels")
+
+def get_LTC_BatchNorm(video_shape, n_classes, dropout, weigh_decay):
+    """Function that return the LTC model with Batch Normalization in the convolutional 
+    layer given the parameters.
+    Args:
+        video_shape: Tuple or List with the shape of the input.
+        n_classes: Integer with the number of classes to predict.
+        dropout: Float between 0 and 1 for the dropout in the fully connected layers.
+        weigh_decay: Float between 0 and inf for the weight decay in the layers.
+    """
+    entrada = keras.Input(shape=video_shape,
+                         name="Input_video")
+    #Conv1
+    x = keras.layers.Conv3D(filters=64, kernel_size=3, padding="same", activation="relu", 
+                              kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                              name='conv3d_1')(entrada)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_1")(x)
+    x = keras.layers.MaxPool3D(pool_size=(1,2,2),strides=(1,2,2), name='max_pooling3d_1')(x)
+
+    #Conv2
+    x = keras.layers.Conv3D(filters=128, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_2')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_2")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2), name='max_pooling3d_2')(x)
+
+    #Conv3
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_3')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_3")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_3')(x)
+
+    #Conv4
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_4')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_4")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_4')(x)
+
+    #Conv5
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_5')(x)
+    x = keras.layers.BatchNormalization(axis=4, name="batch_norm_5")(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_5')(x)
+
+    #fc6s
+    x = keras.layers.Flatten(name='flatten_6')(x)
+    x = keras.layers.Dense(2048, activation="relu", kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                         name='dense_6')(x)
+    x = keras.layers.Dropout(rate=dropout,name='dropout_6')(x)
+
+    #fc7
+    x = keras.layers.Dense(2048, activation="relu", kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                         name='dense_7')(x)
+    x = keras.layers.Dropout(rate=dropout,name='dropout_7')(x)
+
+    #fc8
+    salidas = keras.layers.Dense(n_classes, activation="softmax", 
+                              kernel_regularizer=keras.regularizers.l2(weigh_decay), name='dense_8')(x)
+
+    return keras.Model(entrada, salidas, name="LTC_BatchNorm")
+
+def get_LTC_original(video_shape, n_classes, dropout, weigh_decay):
+    """Function that return the original LTC model with the options given.
+    Args:
+        video_shape: Tuple or List with the shape of the input.
+        n_classes: Integer with the number of classes to predict.
+        dropout: Float between 0 and 1 for the dropout in the fully connected layers.
+        weigh_decay: Float between 0 and inf for the weight decay in the layers.
+    """
+
+    entrada = keras.Input(shape=video_shape,
+                         name="Input_video")
+    #Conv1
+    x = keras.layers.Conv3D(filters=64, kernel_size=3, padding="same", activation="relu", 
+                              kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                              name='conv3d_1')(entrada)
+    x = keras.layers.MaxPool3D(pool_size=(1,2,2),strides=(1,2,2), name='max_pooling3d_1')(x)
+
+    #Conv2
+    x = keras.layers.Conv3D(filters=128, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_2')(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2), name='max_pooling3d_2')(x)
+
+    #Conv3
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_3')(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_3')(x)
+
+    #Conv4
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_4')(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_4')(x)
+
+    #Conv5
+    x = keras.layers.Conv3D(filters=256, kernel_size=3, padding="same", activation="relu", 
+                          kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                          name='conv3d_5')(x)
+    x = keras.layers.MaxPool3D(pool_size=(2,2,2),strides=(2,2,2),name='max_pooling3d_5')(x)
+
+    #fc6s
+    x = keras.layers.Flatten(name='flatten_6')(x)
+    x = keras.layers.Dense(2048, activation="relu", kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                         name='dense_6')(x)
+    x = keras.layers.Dropout(rate=dropout,name='dropout_6')(x)
+
+    #fc7
+    x = keras.layers.Dense(2048, activation="relu", kernel_regularizer=keras.regularizers.l2(weigh_decay),
+                         name='dense_7')(x)
+    x = keras.layers.Dropout(rate=dropout,name='dropout_7')(x)
+
+    #fc8
+    salidas = keras.layers.Dense(n_classes, activation="softmax", 
+                              kernel_regularizer=keras.regularizers.l2(weigh_decay), name='dense_8')(x)
+
+    return keras.Model(entrada, salidas, name="LTC_original")
